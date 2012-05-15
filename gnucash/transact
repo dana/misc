@@ -5,10 +5,11 @@ use Moose::Autobox;
 use XML::Simple;
 use Compress::Zlib;
 use File::Slurp;
+use Digest::MD5 qw(md5_hex);
 
-
+my $gnu_cash_file = '/home/dana/Dropbox/GnuCash/gnucash_main.gnucash';
 my $ref;
-{   my $compressed_xml = read_file('gnucash_main.gnucash');
+{   my $compressed_xml = read_file($gnu_cash_file);
     my $xml = Compress::Zlib::memGunzip($compressed_xml);
     $ref = XMLin($xml);
 }
@@ -38,7 +39,6 @@ my $get_accounts = sub {
 my $dests = {};
 $dests->{from} = $get_accounts->(shift) or die "first argument is source account\n";
 $dests->{to} = $get_accounts->(shift) or die "second argument is destination account\n";
-#my $amount = shift or die "third argument is fractional dollars to move\n";
 ['from','to']->map(sub {
     my $a = $_;
     if($dests->{$a}->length > 1) {
@@ -52,20 +52,30 @@ $dests->{to} = $get_accounts->(shift) or die "second argument is destination acc
 });
 say 'From: ' . $dests->{'from'}->dump;
 say 'To: ' . $dests->{'to'}->dump;
-#say $from->dump;
-#say $to->dump;
-
-#say $ref->dump;
+print 'Enter number of pennies to transfer: ';
+my $amount = <>;
+chomp $amount;
+die "amount must not be blank or zero\n" unless $amount;
+die "amount must be a positive integer\n" unless $amount =~ /^\d+$/;
+say $amount;
+my $get_guid = sub {
+    return Digest::MD5::md5_hex join ' ', stat($gnu_cash_file), $$, time, rand(102400);
+};
+say $get_guid->();
+#say md5_hex('foo');
 __END__
 gnucash_main.gnucash
 $VAR1 = {
    'gnc:book' => {
       'gnc:account' => [
-           'act:name' => 'ING Electric Orange - Checking'
+           'act:name' => 'some kinda bank',
            'act:id' => {
               'content' => 'aede84185ee50cfb9d0dde5daf6a898e',
+                            acbd18db4cc2f85cedef654fccc4a4d8
               'type' => 'guid'
               },
            'act:type' => 'BANK',
            'act:description' => 'Checking Account',
+
+use Digest::MD5 qw(md5_hex);
 
