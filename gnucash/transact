@@ -59,10 +59,18 @@ die "amount must not be blank or zero\n" unless $amount;
 die "amount must be a positive integer\n" unless $amount =~ /^\d+$/;
 say $amount;
 my $get_guid = sub {
-    return Digest::MD5::md5_hex join ' ', stat($gnu_cash_file), $$, time, rand(102400);
+    return md5_hex join ' ', stat($gnu_cash_file), $$, time, rand(102400);
 };
-say $get_guid->();
-#say md5_hex('foo');
+my $new_guid = $get_guid->();
+my $new_transaction;
+{   my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
+    $year += 1900; #y2k, not today!
+    $mon++;
+    my $date = sprintf('%.4d-%.2d-%.2d', $year, $mon, $mday);
+    my $time = sprintf('%s %.2d:%.2d:%.2d -0700', $date, $hour, $min, $sec);
+    say $date;
+    say $time;
+}
 __END__
 gnucash_main.gnucash
 $VAR1 = {
