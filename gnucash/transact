@@ -7,12 +7,13 @@ use Compress::Zlib;
 use File::Slurp;
 use Digest::MD5 qw(md5_hex);
 
-my $gnu_cash_file = '/home/dana/Dropbox/GnuCash/gnucash_main.gnucash';
-my $book;
-{   my $compressed_xml = read_file($gnu_cash_file);
-    my $xml = Compress::Zlib::memGunzip($compressed_xml);
-    $book = XMLin($xml);
-}
+my $gnu_cash_dir = '/home/dana/Dropbox/GnuCash/';
+die "This program can not run while GnuCash itself if running\n"
+    if -e $gnu_cash_dir . '/gnucash_main.gnucash.LCK';
+
+my $gnu_cash_file = "$gnu_cash_dir/gnucash_main.gnucash";
+my $xml = Compress::Zlib::memGunzip(read_file($gnu_cash_file));
+my $book = XMLin($xml);
 my $accounts = [];
 $book->{'gnc:book'}->{'gnc:account'}->map(sub {
     $accounts->push({
@@ -72,87 +73,56 @@ my $new;
     my $time = sprintf('%s %.2d:%.2d:%.2d -0700', $date, $hour, $min, $sec);
     say $date;
     say $time;
-    $new = {
-        'trn:date-entered' => {
-            'ts:date' => $time,
-        },
-        version => '2.0.0',
-        'trn:splits' => {
-            'trn:split' => [
-                {   'split:account' => {
-                        content => $dests->{to}->{id},
-                        type => 'guid',
-                    },
-                    'split:quantity' => $quantity,
-                    'split:value' => $quantity,
-                    'split:reconciled-state' => 'n',
-                    'split:id' => {
-                        content => $get_guid->(),
-                        type => 'guid',
-                    }
-                },{ 'split:account' => {
-                        content => $dests->{from}->{id},
-                        type => 'guid',
-                    },
-                    'split:quantity' => '-' . $quantity,
-                    'split:value' => '-' . $quantity,
-                    'split:reconciled-state' => 'n',
-                    'split:id' => {
-                        content => $get_guid->(),
-                        type => 'guid',
-                    }
-                }
-            ]
-        },
-        'trn:id' => {
-            content => $get_guid->(),
-            type => 'guid',
-        },
-        'trn:currency' => {
-            'cmdty:space' => 'ISO4217',
-            'cmdty:id' => 'USD'
-        },
-        'trn:date-posted' => {
-            'ts:date' => $date . ' 00:00:00 -0700',
-        },
-        'trn:slots' => {
-            'slot' => {
-                'slot:value' => {
-                    'gdate' => $date,
-                    'type' => 'gdate',
-                },
-                'slot:key' => 'date-posted',
-            },
-        },
-        'trn:description' => $description,
-    };
+    my $g1 = $get_guid->();
+    my $g2 = $get_guid->();
+    my $g3 = $get_guid->();
+    $new = qq<gnc:transaction version="2.0.0">
+  <trn:id type="guid">$g1</trn:id>
+  <trn:currency>
+    <cmdty:space>ISO4217</cmdty:space>
+    <cmdty:id>USD</cmdty:id>
+  </trn:currency>
+  <trn:date-posted>
+    <ts:date>$date 00:00:00 -0700</ts:date>
+  </trn:date-posted>
+  <trn:date-entered>
+    <ts:date>$time</ts:date>
+  </trn:date-entered>
+  <trn:description>$description</trn:description>
+  <trn:slots>
+    <slot>
+      <slot:key>date-posted</slot:key>
+      <slot:value type="gdate">
+        <gdate>$date</gdate>
+      </slot:value>
+    </slot>
+  </trn:slots>
+  <trn:splits>
+    <trn:split>
+      <split:id type="guid">$g2</split:id>
+      <split:reconciled-state>n</split:reconciled-state>
+      <split:value>$quantity</split:value>
+      <split:quantity>$quantity</split:quantity>
+      <split:account type="guid">$dests->{to}->{id}</split:account>
+    </trn:split>
+    <trn:split>
+      <split:id type="guid">$g3</split:id>
+      <split:reconciled-state>n</split:reconciled-state>
+      <split:value>-$quantity</split:value>
+      <split:quantity>-$quantity</split:quantity>
+      <split:account type="guid">$dests->{from}->{id}</split:account>
+    </trn:split>
+  </trn:splits>
+</gnc:transaction>
+;
 }
 say $new->dump;
 #finally modify the XML
-$book->{'gnc:book'}->{'gnc:transaction'}->push($new);
+$xml =~ s/\<\/gnc:transaction\>\n\<\/gnc:book\>/\<\/gnc:transaction\>\n$new\<\/gnc:book\>/m;
 my $newfile = $gnu_cash_file . '.new';
 open my $fh, '>', $newfile;
-print $fh XMLout($book);
+print $fh $xml;
 close $fh;
 system "gzip $newfile";
 my $gz = $newfile . '.gz';
-#rename $gz, $gnu_cash_file;
-__END__
-gnucash_main.gnucash.LCK
-gnucash_main.gnucash.7f0101.25242.LNK
-
-gnucash_main.gnucash
-$VAR1 = {
-   'gnc:book' => {
-      'gnc:account' => [
-           'act:name' => 'some kinda bank',
-           'act:id' => {
-              'content' => 'aede84185ee50cfb9d0dde5daf6a898e',
-                            acbd18db4cc2f85cedef654fccc4a4d8
-              'type' => 'guid'
-              },
-           'act:type' => 'BANK',
-           'act:description' => 'Checking Account',
-
-use Digest::MD5 qw(md5_hex);
-
+rename $gz, $gnu_cash_file;
