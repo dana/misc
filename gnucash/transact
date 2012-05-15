@@ -39,6 +39,7 @@ my $get_accounts = sub {
 my $dests = {};
 $dests->{from} = $get_accounts->(shift) or die "first argument is source account\n";
 $dests->{to} = $get_accounts->(shift) or die "second argument is destination account\n";
+my $description = shift or die "third argument must be a transaction description\n";
 ['from','to']->map(sub {
     my $a = $_;
     if($dests->{$a}->length > 1) {
@@ -50,27 +51,83 @@ $dests->{to} = $get_accounts->(shift) or die "second argument is destination acc
     }
     $dests->{$a} = $dests->{$a}->pop;
 });
-say 'From: ' . $dests->{'from'}->dump;
-say 'To: ' . $dests->{'to'}->dump;
+say 'From: ' . $dests->{from}->dump;
+say 'To: ' . $dests->{to}->dump;
+say $description;
 print 'Enter number of pennies to transfer: ';
 my $amount = <>;
 chomp $amount;
 die "amount must not be blank or zero\n" unless $amount;
 die "amount must be a positive integer\n" unless $amount =~ /^\d+$/;
-say $amount;
 my $get_guid = sub {
     return md5_hex join ' ', stat($gnu_cash_file), $$, time, rand(102400);
 };
-my $new_guid = $get_guid->();
-my $new_transaction;
-{   my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
+my $new;
+{   my $new_guid = $get_guid->();
+    my $quantity = $amount . '/100';
+    my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
     $year += 1900; #y2k, not today!
     $mon++;
     my $date = sprintf('%.4d-%.2d-%.2d', $year, $mon, $mday);
     my $time = sprintf('%s %.2d:%.2d:%.2d -0700', $date, $hour, $min, $sec);
     say $date;
     say $time;
+    $new = {
+        'trn:date-entered' => {
+            'ts:date' => $time,
+        },
+        version => '2.0.0',
+        'trn:splits' => {
+            'trn:split' => [
+                {   'split:account' => {
+                        content => $dests->{to}->{id},
+                        type => 'guid',
+                    },
+                    'split:quantity' => $quantity,
+                    'split:value' => $quantity,
+                    'split:reconciled-state' => 'n',
+                    'split:id' => {
+                        content => $get_guid->(),
+                        type => 'guid',
+                    }
+                },{ 'split:account' => {
+                        content => $dests->{from}->{id},
+                        type => 'guid',
+                    },
+                    'split:quantity' => '-' . $quantity,
+                    'split:value' => '-' . $quantity,
+                    'split:reconciled-state' => 'n',
+                    'split:id' => {
+                        content => $get_guid->(),
+                        type => 'guid',
+                    }
+                }
+            ]
+        },
+        'trn:id' => {
+            content => $get_guid->(),
+            type => 'guid',
+        },
+        'trn:currency' => {
+            'cmdty:space' => 'ISO4217',
+            'cmdty:id' => 'USD'
+        },
+        'trn:date-posted' => {
+            'ts:date' => $date . ' 00:00:00 -0700',
+        },
+        'trn:slots' => {
+            'slot' => {
+                'slot:value' => {
+                    'gdate' => $date,
+                    'type' => 'gdate',
+                },
+                'slot:key' => 'date-posted',
+            },
+        },
+        'trn:description' => $description,
+    };
 }
+say $new->dump;
 __END__
 gnucash_main.gnucash
 $VAR1 = {
