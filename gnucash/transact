@@ -1,0 +1,71 @@
+#!/home/dana/perl5/perlbrew/perls/perl-5.14.0/bin/perl
+
+use common::sense;
+use Moose::Autobox;
+use XML::Simple;
+use Compress::Zlib;
+use File::Slurp;
+
+
+my $ref;
+{   my $compressed_xml = read_file('gnucash_main.gnucash');
+    my $xml = Compress::Zlib::memGunzip($compressed_xml);
+    $ref = XMLin($xml);
+}
+my $accounts = [];
+$ref->{'gnc:book'}->{'gnc:account'}->map(sub {
+    $accounts->push({
+        name => $_->{'act:name'},
+        id => $_->{'act:id'}->{content},
+        desc => $_->{'act:description'},
+        type => $_->{'act:type'},
+    });
+});
+my $get_accounts = sub {
+    my $name = shift or return 0;
+    my $returns = [];
+    $accounts->map(sub {
+        $returns->push($_) if $_->{name} =~ /^$name/;
+    });
+    if(not $returns->length) {
+        $accounts->map(sub {
+            $returns->push($_) if $_->{name} =~ /$name/;
+        });
+    }
+    return $returns;
+};
+
+my $dests = {};
+$dests->{from} = $get_accounts->(shift) or die "first argument is source account\n";
+$dests->{to} = $get_accounts->(shift) or die "second argument is destination account\n";
+#my $amount = shift or die "third argument is fractional dollars to move\n";
+['from','to']->map(sub {
+    my $a = $_;
+    if($dests->{$a}->length > 1) {
+        say "multiple '$a' accounts match:";
+        $dests->{$a}->map(sub {
+            say "   $_->{name}";
+        });
+        exit;
+    }
+    $dests->{$a} = $dests->{$a}->pop;
+});
+say 'From: ' . $dests->{'from'}->dump;
+say 'To: ' . $dests->{'to'}->dump;
+#say $from->dump;
+#say $to->dump;
+
+#say $ref->dump;
+__END__
+gnucash_main.gnucash
+$VAR1 = {
+   'gnc:book' => {
+      'gnc:account' => [
+           'act:name' => 'ING Electric Orange - Checking'
+           'act:id' => {
+              'content' => 'aede84185ee50cfb9d0dde5daf6a898e',
+              'type' => 'guid'
+              },
+           'act:type' => 'BANK',
+           'act:description' => 'Checking Account',
+
