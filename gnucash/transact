@@ -8,13 +8,13 @@ use File::Slurp;
 use Digest::MD5 qw(md5_hex);
 
 my $gnu_cash_file = '/home/dana/Dropbox/GnuCash/gnucash_main.gnucash';
-my $ref;
+my $book;
 {   my $compressed_xml = read_file($gnu_cash_file);
     my $xml = Compress::Zlib::memGunzip($compressed_xml);
-    $ref = XMLin($xml);
+    $book = XMLin($xml);
 }
 my $accounts = [];
-$ref->{'gnc:book'}->{'gnc:account'}->map(sub {
+$book->{'gnc:book'}->{'gnc:account'}->map(sub {
     $accounts->push({
         name => $_->{'act:name'},
         id => $_->{'act:id'}->{content},
@@ -128,7 +128,19 @@ my $new;
     };
 }
 say $new->dump;
+#finally modify the XML
+$book->{'gnc:book'}->{'gnc:transaction'}->push($new);
+my $newfile = $gnu_cash_file . '.new';
+open my $fh, '>', $newfile;
+print $fh XMLout($book);
+close $fh;
+system "gzip $newfile";
+my $gz = $newfile . '.gz';
+#rename $gz, $gnu_cash_file;
 __END__
+gnucash_main.gnucash.LCK
+gnucash_main.gnucash.7f0101.25242.LNK
+
 gnucash_main.gnucash
 $VAR1 = {
    'gnc:book' => {
